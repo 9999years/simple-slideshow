@@ -13,3 +13,4 @@ handlebars = "3.1.0"
 notify = "4.0.15"
 thiserror = "1.0.20"
 walkdir = "2.3.1"
+serde = { version = "1.0.113", features = ["derive"] }

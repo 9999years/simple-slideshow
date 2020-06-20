@@ -5,6 +5,7 @@ use std::string::FromUtf8Error;
 
 use handlebars::{Handlebars, TemplateRenderError};
 use pulldown_cmark::{html, Options, Parser};
+use serde::Serialize;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -28,12 +29,21 @@ pub fn render(input_file: PathBuf, template: PathBuf) -> Result<String, RenderEr
 
     let mut markdown_html = String::with_capacity(input.len() * 2);
     html::push_html(&mut markdown_html, parser);
-
     let mut html_output = Vec::<u8>::with_capacity(template.len() + markdown_html.len());
+
+    let ctx = TemplateContext {
+        content: markdown_html,
+    };
+
     let mut reg = Handlebars::new();
-    reg.render_template_source_to_write(&mut template.as_bytes(), &(), &mut html_output)?;
+    reg.render_template_source_to_write(&mut template.as_bytes(), &ctx, &mut html_output)?;
 
     Ok(String::from_utf8(html_output)?)
+}
+
+#[derive(Serialize, Debug)]
+struct TemplateContext {
+    content: String,
 }
 
 fn read(path: PathBuf) -> Result<String, RenderError> {

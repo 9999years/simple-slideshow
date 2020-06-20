@@ -1,6 +1,8 @@
 use std::error;
+use std::fmt;
+use std::fs::{self, File};
+use std::io::{self, Write};
 use std::path::{Path, PathBuf, StripPrefixError};
-use std::{fs, io};
 
 use structopt::StructOpt;
 use thiserror::Error;
@@ -32,7 +34,13 @@ struct Opt {
     output: PathBuf,
 }
 
-fn main() -> Result<(), Box<dyn error::Error>> {
+fn main() {
+    if let Err(e) = main_inner() {
+        println!("{}", e);
+    }
+}
+
+fn main_inner() -> Result<(), Box<dyn error::Error>> {
     let opt = Opt::from_args();
 
     if opt.watch {
@@ -90,14 +98,24 @@ enum BuildErr {
 
     #[error("{0}")]
     Render(#[from] markdown::RenderError),
+
+    #[error("Error creating output file {0}: {1}")]
+    OutputFile(PathBuf, io::Error),
+
+    #[error("Error writing output file {0}: {1}")]
+    OutputWrite(PathBuf, io::Error),
 }
 
 fn build(opt: Opt) -> Result<(), BuildErr> {
     copy_static(&opt.static_dir, &opt.output)?;
+    make_output(&opt.output).map_err(|e| BuildErr::OutputFile(opt.output.clone(), e))?;
 
     let res = markdown::render(opt.input, opt.template)?;
 
-    println!("{}", res);
+    let output = opt.output.join("index.html");
+
+    let mut file = File::create(&output).map_err(|e| BuildErr::OutputFile(output.clone(), e))?;
+    write!(&mut file, "{}", res).map_err(|e| BuildErr::OutputWrite(output, e))?;
 
     Ok(())
 }
@@ -147,5 +165,13 @@ fn watch(opt: Opt) -> Result<(), WatchErr> {
             }
             _ => {}
         }
+    }
+}
+
+fn make_output(output_dir: &Path) -> io::Result<()> {
+    if !output_dir.exists() {
+        fs::create_dir_all(output_dir)
+    } else {
+        Ok(())
     }
 }
