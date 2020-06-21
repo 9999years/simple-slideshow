@@ -75,6 +75,7 @@ struct Slideshow<'a> {
     parser: Parser<'a>,
     next_events: VecDeque<Event<'a>>,
     in_slide: bool,
+    slide_number: u32,
 }
 
 impl<'a> Slideshow<'a> {
@@ -83,20 +84,27 @@ impl<'a> Slideshow<'a> {
             parser,
             next_events: Default::default(),
             in_slide: false,
+            slide_number: 0,
         };
         ret.start_slide();
         ret
     }
 
     fn start_slide(&mut self) {
+        self.slide_number += 1;
         self.in_slide = true;
-        self.next_events
-            .push_back(Event::Html(r#"<section class="slide">"#.into()));
+        self.next_events.push_back(Event::Html(
+            format!(
+                r#"<section class="slide" id="slide-{}"><div class="slide-inner">"#,
+                self.slide_number
+            )
+            .into(),
+        ));
     }
 
     fn end_slide(&mut self) {
         self.next_events
-            .push_back(Event::Html(r#"</section>"#.into()));
+            .push_back(Event::Html(r#"</div></section>"#.into()));
         self.in_slide = false;
     }
 

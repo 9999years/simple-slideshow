@@ -55,7 +55,21 @@ fn main() {
 fn main_inner() -> Result<(), Box<dyn error::Error>> {
     use tracing_subscriber::fmt::format::Format;
 
-    let opt = Opt::from_args();
+    let opt = {
+        let mut opt = Opt::from_args();
+        opt.static_dir = opt
+            .static_dir
+            .canonicalize()
+            .expect("Canonicalize static_dir");
+        opt.template = opt.template.canonicalize().expect("Canonicalize template");
+        opt.input = opt.input.canonicalize().expect("Canonicalize input");
+        opt.output_dir = opt
+            .output_dir
+            .canonicalize()
+            .expect("Canonicalize output_dir");
+        opt
+    };
+
     let subscriber = tracing_subscriber::fmt()
         .with_max_level(opt.trace_level.clone())
         // .event_format(Format::default().compact())
@@ -196,10 +210,16 @@ impl Opt {
             .watch(&self.static_dir, RecursiveMode::Recursive)
             .unwrap();
         watcher
-            .watch(&self.input, RecursiveMode::NonRecursive)
+            .watch(
+                &self.input.parent().unwrap_or(&self.input),
+                RecursiveMode::NonRecursive,
+            )
             .unwrap();
         watcher
-            .watch(&self.template, RecursiveMode::NonRecursive)
+            .watch(
+                &self.template.parent().unwrap_or(&self.template),
+                RecursiveMode::NonRecursive,
+            )
             .unwrap();
 
         event!(Level::INFO, "initialized filesystem watcher");
@@ -214,12 +234,7 @@ impl Opt {
             let _guard = span.enter();
             event!(Level::INFO, ?event);
             match event {
-                DebouncedEvent::Create(path) => {
-                    if path.starts_with(&self.static_dir) {
-                        self.copy_single_static(path)?;
-                    }
-                }
-                DebouncedEvent::Write(path) => {
+                DebouncedEvent::Create(path) | DebouncedEvent::Write(path) => {
                     if path.starts_with(&self.static_dir) {
                         self.copy_single_static(path)?;
                     } else if &path == &self.input || &path == &self.template {
@@ -249,7 +264,7 @@ impl Opt {
                     return Err(WatchErr::Notify(err, path));
                 }
                 _ => {
-                    event!(Level::INFO, "unhandled event");
+                    event!(Level::DEBUG, "unhandled event");
                 }
             }
         }
